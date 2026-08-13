@@ -21,12 +21,26 @@ export default function Simulador() {
   const produto = produtos.find((p) => p.id === produtoId)
   const bordado = bordados.find((b) => b.codigo === bordadoCodigo)
 
+  const bordadoMaisCaro = useMemo(
+    () => bordados.reduce((max, b) => (b.precoMedio > (max?.precoMedio ?? 0) ? b : max), bordados[0]),
+    [bordados]
+  )
+
+  const sacraFormula = useMemo(() => {
+    if (!produto) return null
+    const custoPeca = produto.precoCompra
+    const custoBordadoSacra = bordadoMaisCaro?.precoMedio ?? 35
+    const markup = 2.3
+    const precoSacra = (custoPeca + custoBordadoSacra) * markup
+    return { custoPeca, custoBordadoSacra, markup, precoSacra }
+  }, [produto, bordadoMaisCaro])
+
   const resultado = useMemo(() => {
     if (!produto || !bordado) return null
 
     const custoBase = produto.precoCompra
     const custoBordado = bordado.precoMedio
-    const custoEmb = parametros.embalagem.media
+    const custoEmb = 4
     const custoEtiq = parametros.etiquetas
     const custoMat = parametros.materiais
     const custoFrete = freteKg / Math.max(1, quantidade)
@@ -165,11 +179,50 @@ export default function Simulador() {
 
         {/* Resultado */}
         <div className="space-y-4">
+          {/* Fórmula Sacra Devoção — sempre visível quando produto selecionado */}
+          {sacraFormula && (
+            <div
+              className="card"
+              style={{ background: 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)', border: '1px solid #FDE68A' }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span style={{ fontSize: 18 }}>✦</span>
+                <h4 className="font-heading font-semibold text-sm" style={{ color: '#92400E' }}>
+                  Fórmula de Precificação Sacra Devoção
+                </h4>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span style={{ color: '#92400E' }}>Custo da peça</span>
+                  <span className="font-medium">{fmtBRL(sacraFormula.custoPeca)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: '#92400E' }}>Bordado mais caro ({bordadoMaisCaro?.descricao?.replace('BORDADO ', '')})</span>
+                  <span className="font-medium">+ {fmtBRL(sacraFormula.custoBordadoSacra)}</span>
+                </div>
+                <div className="flex justify-between text-xs italic" style={{ color: '#A16207' }}>
+                  <span>Subtotal × markup {sacraFormula.markup}×</span>
+                  <span>({fmtBRL(sacraFormula.custoPeca + sacraFormula.custoBordadoSacra)}) × {sacraFormula.markup}</span>
+                </div>
+                <div
+                  className="flex justify-between pt-2 border-t font-heading font-bold text-base"
+                  style={{ borderColor: '#FDE68A', color: '#92400E' }}
+                >
+                  <span>Preço sugerido Sacra</span>
+                  <span style={{ color: '#C0955A', fontSize: 20 }}>{fmtBRL(sacraFormula.precoSacra)}</span>
+                </div>
+              </div>
+              <p className="text-xs mt-2 italic" style={{ color: '#A16207', opacity: 0.8 }}>
+                Fórmula: (custo peça + bordado mais caro) × {sacraFormula.markup}
+              </p>
+            </div>
+          )}
+
           {!resultado ? (
-            <div className="card flex items-center justify-center h-64" style={{ border: '2px dashed var(--sacra-sand)' }}>
+            <div className="card flex items-center justify-center h-48" style={{ border: '2px dashed var(--sacra-sand)' }}>
               <div className="text-center" style={{ color: '#B09070' }}>
                 <Calculator size={40} className="mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Selecione um produto e um design para calcular</p>
+                <p className="text-sm">Selecione um produto e um design para calcular a margem</p>
               </div>
             </div>
           ) : (

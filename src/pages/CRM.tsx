@@ -225,9 +225,9 @@ export default function CRM() {
       </div>
 
       {/* Filtros + Novo */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9A7540' }} />
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative" style={{ flex: '3 1 200px', minWidth: 200 }}>
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#9A7540' }} />
           <input
             className="sacra-input pl-9"
             placeholder="Buscar por nome, telefone, cidade..."
@@ -236,7 +236,8 @@ export default function CRM() {
           />
         </div>
         <select
-          className="sacra-select w-44"
+          className="sacra-select"
+          style={{ flex: '1 1 155px', minWidth: 155, width: 'auto' }}
           value={canalFiltro}
           onChange={(e) => setCanalFiltro(e.target.value as any)}
         >
@@ -246,14 +247,15 @@ export default function CRM() {
           <option value="ambos">Ambos</option>
         </select>
         <select
-          className="sacra-select w-44"
+          className="sacra-select"
+          style={{ flex: '1 1 155px', minWidth: 155, width: 'auto' }}
           value={segFiltro}
           onChange={(e) => setSegFiltro(e.target.value)}
         >
           <option value="">Todos segmentos</option>
           {segmentos.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <button className="btn-primary ml-auto" onClick={() => { setFormCli(EMPTY_CLI); setNovoOpen(true) }}>
+        <button className="btn-primary flex-shrink-0" onClick={() => { setFormCli(EMPTY_CLI); setNovoOpen(true) }}>
           <Plus size={15} /> Novo Cliente
         </button>
       </div>

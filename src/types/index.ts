@@ -35,10 +35,21 @@ export interface Produto {
   fornecedorId: string
   fornecedorNome: string
   descricao: string
-  precoCompra: number
-  precoVenda: number
+  precoCompra: number   // preço base de compra (referência)
+  precoVenda: number    // preço base de venda (referência)
   categoria: 'vestuario' | 'acessorio'
   subcategoria: string
+}
+
+// ─── Variante de Produto (Tamanho × Cor) ─────────────────────────────────────
+export interface ProdutoVariante {
+  id: string
+  produtoId: string
+  tamanho: string       // PP / P / M / G / GG / GGG / Único
+  cor: string           // Preto, Azul Marinho, etc.
+  custoUnitario: number
+  precoVenda: number
+  estoque: number       // unidades em estoque
 }
 
 // ─── SKU (Produto + Bordado) ─────────────────────────────────────────────────
@@ -56,6 +67,8 @@ export interface SKU {
   markup?: number         // multiplicador usado para sugerir preço
   produtoId?: string      // link para Produto
   bordadoCodigo?: string  // link para Bordado
+  tamanho?: string        // ex: PP / P / M / G / GG
+  cor?: string            // ex: Preto, Azul Marinho
 }
 
 // ─── Venda ────────────────────────────────────────────────────────────────────
@@ -67,6 +80,8 @@ export interface Venda {
   codigoBordado: string
   descricaoBordado: string
   produto?: string
+  tamanho?: string   // PP / P / M / G / GG / GGG / Único
+  cor?: string       // cor da peça
   quantidade: number
   precoUnitario: number
   total: number
@@ -88,13 +103,19 @@ export interface Compra {
   dataPedido: string
   fornecedor: string
   produto: string
+  produtoId?: string      // link para Produto
+  varianteId?: string     // link para ProdutoVariante
+  tamanho: string         // tamanho específico desta compra
+  cor: string             // cor específica desta compra
   bordado: string
-  qtdPP: number
-  qtdP: number
-  qtdM: number
-  qtdG: number
-  qtdGG: number
-  qtdTotal: number
+  codigoBordado?: string  // link to Bordado.codigo (set when bordado is confirmed)
+  // Legacy fields (kept for old data in localStorage)
+  qtdPP?: number
+  qtdP?: number
+  qtdM?: number
+  qtdG?: number
+  qtdGG?: number
+  qtdTotal: number        // quantidade total desta linha
   precoUnitario: number
   valorTotal: number
   frete?: number          // freight cost for the order
@@ -106,6 +127,17 @@ export interface Compra {
   leadTimeBordado?: number
   observacoes?: string
   adicionadoAoEstoque?: boolean
+}
+
+// ─── Funcionário ─────────────────────────────────────────────────────────────
+export interface Funcionario {
+  id: string
+  nome: string
+  cargo: string
+  foto?: string
+  responsabilidades: string[]
+  rotinas: string[]
+  criadoEm: string
 }
 
 // ─── Custo Fixo ───────────────────────────────────────────────────────────────
@@ -133,6 +165,7 @@ export interface ParametrosFinanceiros {
   etiquetas: number
   materiais: number
   metaMensal?: number          // meta de faturamento mensal
+  limitePresenteDoacao?: number // limite mensal de presentes e doações
 }
 
 // ─── Movimentação de Caixa ───────────────────────────────────────────────────
@@ -185,6 +218,29 @@ export interface DREMes {
   margemPercent: number
 }
 
+// ─── Manual de Processos ─────────────────────────────────────────────────────
+export interface PassoManual {
+  descricao: string
+  dica?: string       // optional tip / warning
+}
+
+export interface ProcessoManual {
+  id: string
+  titulo: string      // e.g. "Abertura da loja"
+  categoria: string   // e.g. "Atendimento", "Estoque", "Bordado"
+  passos: PassoManual[]
+  criadoEm: string
+}
+
+// ─── Presentes e Doações ─────────────────────────────────────────────────────
+export interface LancamentoPD {
+  id: string
+  data: string            // YYYY-MM-DD
+  tipo: 'presente' | 'doacao'
+  descricao: string
+  valor: number
+}
+
 // ─── CRM ─────────────────────────────────────────────────────────────────────
 export interface Cliente {
   id: string
@@ -215,6 +271,8 @@ export interface CompraHistorico {
   data: string
   descricaoBordado: string
   produto?: string
+  tamanho?: string
+  cor?: string
   quantidade: number
   precoUnitario: number
   total: number
@@ -257,11 +315,14 @@ export interface AppStore {
   bordados: Bordado[]
   fornecedores: Fornecedor[]
   produtos: Produto[]
+  variantes: ProdutoVariante[]
   skus: SKU[]
   custosFixos: CustoFixo[]
   parametros: ParametrosFinanceiros
   mixProdutos: ItemMix[]
-  dreMeses: DREMes[]
+  funcionarios: Funcionario[]
+  lancamentosPD: LancamentoPD[]
+  processos: ProcessoManual[]
 
   // Vendas
   addVenda: (v: Omit<Venda, 'id'>) => void
@@ -320,6 +381,12 @@ export interface AppStore {
   updateProduto: (id: string, p: Partial<Produto>) => void
   deleteProduto: (id: string) => void
 
+  // Variantes
+  addVariante: (v: Omit<ProdutoVariante, 'id'>) => void
+  updateVariante: (id: string, v: Partial<ProdutoVariante>) => void
+  deleteVariante: (id: string) => void
+  ajustarEstoque: (id: string, delta: number) => void
+
   // Eventos
   eventos: Evento[]
   addEvento: (e: Omit<Evento, 'id'>) => void
@@ -330,4 +397,19 @@ export interface AppStore {
   movimentacoes: MovimentacaoCaixa[]
   addMovimentacao: (m: Omit<MovimentacaoCaixa, 'id'>) => void
   deleteMovimentacao: (id: string) => void
+
+  // Funcionários
+  addFuncionario: (f: Omit<Funcionario, 'id'>) => void
+  updateFuncionario: (id: string, f: Partial<Funcionario>) => void
+  deleteFuncionario: (id: string) => void
+  reorderFuncionarios: (ids: string[]) => void
+
+  // Presentes e Doações
+  addLancamentoPD: (l: Omit<LancamentoPD, 'id'>) => void
+  deleteLancamentoPD: (id: string) => void
+
+  // Processos (Manual)
+  addProcesso: (p: Omit<ProcessoManual, 'id'>) => void
+  updateProcesso: (id: string, p: Partial<ProcessoManual>) => void
+  deleteProcesso: (id: string) => void
 }

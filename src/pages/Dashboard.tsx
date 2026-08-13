@@ -173,43 +173,49 @@ export default function Dashboard() {
       {/* ── KPIs operacionais ────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card">
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
               <p className="kpi-label">Vendas Hoje</p>
               <p className="kpi-value">{fmtBRL(totalHoje)}</p>
               <p className="kpi-sub">{vendasHoje.length} transaç{vendasHoje.length === 1 ? 'ão' : 'ões'}</p>
             </div>
-            <div className="kpi-icon"><TrendingUp size={18} /></div>
+            <div className="kpi-icon flex-shrink-0"><TrendingUp size={18} /></div>
           </div>
         </div>
 
         <div className="kpi-card">
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
               <p className="kpi-label">Vendas do Mês</p>
               <p className="kpi-value">{fmtBRL(totalMes)}</p>
               <p className="kpi-sub">{vendasMes.length} transaç{vendasMes.length === 1 ? 'ão' : 'ões'}</p>
             </div>
-            <div className="kpi-icon"><ShoppingBag size={18} /></div>
+            <div className="kpi-icon flex-shrink-0"><ShoppingBag size={18} /></div>
           </div>
         </div>
 
         <div className="kpi-card">
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
               <p className="kpi-label">Compras Ativas</p>
               <p className="kpi-value">{comprasAtivas.length}</p>
               <p className="kpi-sub">pedidos em andamento</p>
             </div>
-            <div className="kpi-icon"><Package size={18} /></div>
+            <div className="kpi-icon flex-shrink-0"><Package size={18} /></div>
           </div>
         </div>
 
         <div className="kpi-card">
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
               <p className="kpi-label">Próximo Evento</p>
-              <p className="kpi-value text-base leading-snug truncate" style={{ maxWidth: '100%' }}>
+              <p className="kpi-value text-sm font-semibold leading-snug" style={{
+                overflow: 'hidden',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                fontFamily: 'inherit',
+              }}>
                 {proximoEvento ? proximoEvento.nome : '—'}
               </p>
               <p className="kpi-sub">
@@ -218,7 +224,7 @@ export default function Dashboard() {
                   : 'Nenhum agendado'}
               </p>
             </div>
-            <div className="kpi-icon"><Calendar size={18} /></div>
+            <div className="kpi-icon flex-shrink-0"><Calendar size={18} /></div>
           </div>
         </div>
       </div>
@@ -370,10 +376,10 @@ export default function Dashboard() {
             </div>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={wishlistDemanda} layout="vertical"
-                margin={{ top: 0, right: 20, left: 0, bottom: 4 }}>
+                margin={{ top: 0, right: 24, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={SAND} horizontal={false} />
                 <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#6B4C2A' }} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#6B4C2A' }} width={130} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#6B4C2A' }} width={155} />
                 <Tooltip
                   formatter={(v: number) => [`${v} cliente${v !== 1 ? 's' : ''}`, 'Aguardando']}
                   contentStyle={{ background: COFFEE, border: `1px solid ${GOLD}`, borderRadius: 8 }}

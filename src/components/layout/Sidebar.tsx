@@ -11,6 +11,9 @@ import {
   CalendarDays,
   X,
   Receipt,
+  Archive,
+  UserCog,
+  FileBarChart2,
 } from 'lucide-react'
 
 const NAV = [
@@ -22,8 +25,11 @@ const NAV = [
   { to: '/fornecedores', label: 'Fornecedores', icon: Truck },
   { to: '/produtos', label: 'Produtos & SKUs', icon: Package },
   { to: '/compras', label: 'Compras', icon: Receipt },
+  { to: '/estoque', label: 'Estoque', icon: Archive },
   { to: '/simulador', label: 'Simulador de Preço', icon: Calculator },
   { to: '/financeiro', label: 'Hub Financeiro', icon: BarChart3 },
+  { to: '/membros', label: 'Membros & Equipe', icon: UserCog },
+  { to: '/relatorios', label: 'Relatórios', icon: FileBarChart2 },
 ]
 
 interface SidebarProps {
@@ -99,14 +105,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           ))}
         </nav>
 
-        {/* Footer */}
-        <div
-          className="px-5 py-4 border-t border-white/10 text-center"
-        >
-          <p className="text-xs font-body" style={{ color: 'var(--sacra-sand)', opacity: 0.4 }}>
-            Moda cristã com beleza e propósito
-          </p>
-        </div>
       </aside>
     </>
   )

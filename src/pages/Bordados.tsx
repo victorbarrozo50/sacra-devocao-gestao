@@ -184,7 +184,7 @@ export default function Bordados() {
       <div className="card">
         <h3 className="font-heading text-lg mb-4" style={{ color: COFFEE }}>Top 10 Designs por Receita</h3>
         <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={top10} margin={{ top: 0, right: 0, left: 0, bottom: 50 }}>
+          <BarChart data={top10} margin={{ top: 4, right: 8, left: 4, bottom: 50 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={SAND} />
             <XAxis
               dataKey="name"
@@ -193,7 +193,7 @@ export default function Bordados() {
               textAnchor="end"
               interval={0}
             />
-            <YAxis tick={{ fontSize: 11, fill: '#6B4C2A' }} tickFormatter={(v) => `R$${v}`} width={60} />
+            <YAxis tick={{ fontSize: 9, fill: '#6B4C2A' }} tickFormatter={(v) => fmtBRL(v)} width={80} />
             <Tooltip content={<CustomTooltip />} />
             <Bar dataKey="receita" name="Receita" fill={GOLD} radius={[4, 4, 0, 0]} />
           </BarChart>
@@ -201,9 +201,9 @@ export default function Bordados() {
       </div>
 
       {/* Filters + Add */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9A7540' }} />
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#9A7540' }} />
           <input
             className="sacra-input pl-9"
             placeholder="Buscar design..."

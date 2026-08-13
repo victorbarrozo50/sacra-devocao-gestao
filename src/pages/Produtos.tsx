@@ -6,13 +6,25 @@ import {
 } from 'recharts'
 import { useStore } from '../hooks/useStore'
 import { fmtBRL } from '../utils/format'
-import type { SKU, Produto } from '../types'
+import type { SKU, Produto, ProdutoVariante } from '../types'
 
 const GOLD   = '#C0955A'
 const COFFEE = '#3E2A1B'
 const SAND   = '#E7DCC8'
 
 // ─── tipos locais de formulário ──────────────────────────────────────────────
+const CORES_SUGERIDAS = ['Preto', 'Branco', 'Cinza', 'Azul Marinho', 'Azul', 'Vermelho', 'Rosa', 'Rosa Bebê', 'Lilás', 'Verde', 'Amarelo', 'Laranja', 'Bege', 'Vinho', 'Dourado']
+const TAMANHOS_TODOS = ['PP', 'P', 'M', 'G', 'GG', 'GGG', 'Único']
+
+type VarianteForm = {
+  tamanho: string
+  cor: string
+  custoUnitario: string
+  precoVenda: string
+}
+
+const EMPTY_VARIANTE: VarianteForm = { tamanho: '', cor: '', custoUnitario: '', precoVenda: '' }
+
 type SKUForm = {
   produtoId: string
   bordadoCodigo: string
@@ -20,6 +32,8 @@ type SKUForm = {
   markup: string
   origem: string
   transportadora: string
+  tamanho: string
+  cor: string
 }
 type ProdutoForm = {
   fornecedorId: string
@@ -32,7 +46,7 @@ type ProdutoForm = {
 
 const emptySkuForm: SKUForm = {
   produtoId: '', bordadoCodigo: '', precoVenda: '', markup: '2',
-  origem: '', transportadora: '',
+  origem: '', transportadora: '', tamanho: '', cor: '',
 }
 const emptyProdForm: ProdutoForm = {
   fornecedorId: '', descricao: '', precoCompra: '', precoVenda: '',
@@ -66,6 +80,8 @@ function ModalSKU({ editId, onClose }: { editId: string | null; onClose: () => v
       markup:         s.markup?.toString() ?? '2',
       origem:         s.origem ?? '',
       transportadora: s.transportadora ?? '',
+      tamanho:        s.tamanho ?? '',
+      cor:            s.cor ?? '',
     }
   }, [editId, skus])
 
@@ -121,6 +137,8 @@ function ModalSKU({ editId, onClose }: { editId: string | null; onClose: () => v
       markup:         markupNum || undefined,
       produtoId:      produtoSel.id,
       bordadoCodigo:  bordadoSel.codigo,
+      tamanho:        form.tamanho || undefined,
+      cor:            form.cor || undefined,
     }
     if (editId) updateSKU(editId, sku)
     else addSKU(sku)
@@ -280,6 +298,26 @@ function ModalSKU({ editId, onClose }: { editId: string | null; onClose: () => v
             </div>
           </div>
 
+          {/* Tamanho + cor da variante */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="sacra-label">Tamanho desta variante</label>
+              <select className="sacra-select w-full" value={form.tamanho}
+                onChange={(e) => set('tamanho', e.target.value)}>
+                <option value="">—</option>
+                {TAMANHOS_TODOS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="sacra-label">Cor desta variante</label>
+              <input className="sacra-input w-full" list="sku-cores" placeholder="Ex: Preto"
+                value={form.cor} onChange={(e) => set('cor', e.target.value)} />
+              <datalist id="sku-cores">
+                {CORES_SUGERIDAS.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+          </div>
+
           {/* Ações */}
           <div className="flex justify-end gap-3 pt-2">
             <button className="btn-secondary" onClick={onClose}>Cancelar</button>
@@ -296,7 +334,7 @@ function ModalSKU({ editId, onClose }: { editId: string | null; onClose: () => v
 
 // ─── Modal Produto ────────────────────────────────────────────────────────────
 function ModalProduto({ editId, onClose }: { editId: string | null; onClose: () => void }) {
-  const { produtos, fornecedores, addProduto, updateProduto } = useStore()
+  const { produtos, fornecedores, variantes, addProduto, updateProduto, addVariante, deleteVariante } = useStore()
 
   const initial = useMemo<ProdutoForm>(() => {
     if (!editId) return emptyProdForm
@@ -315,9 +353,65 @@ function ModalProduto({ editId, onClose }: { editId: string | null; onClose: () 
   const [form, setForm] = useState<ProdutoForm>(initial)
   const set = (k: keyof ProdutoForm, v: string) => setForm((f) => ({ ...f, [k]: v }))
 
-  const custo    = parseFloat(form.precoCompra) || 0
-  const venda    = parseFloat(form.precoVenda) || 0
-  const margem   = venda > 0 ? ((venda - custo) / venda) * 100 : 0
+  const [localVariantes, setLocalVariantes] = useState<ProdutoVariante[]>(() =>
+    editId ? variantes.filter((v) => v.produtoId === editId) : []
+  )
+  const [nova, setNova] = useState<VarianteForm>(EMPTY_VARIANTE)
+  const [editIdx, setEditIdx] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState<VarianteForm & { estoque: string }>(
+    { ...EMPTY_VARIANTE, estoque: '0' }
+  )
+
+  const custo  = parseFloat(form.precoCompra) || 0
+  const venda  = parseFloat(form.precoVenda) || 0
+  const margem = venda > 0 ? ((venda - custo) / venda) * 100 : 0
+
+  const addLocalVariante = () => {
+    if (!nova.tamanho || !nova.cor) return
+    setLocalVariantes((prev) => [
+      ...prev,
+      {
+        id: `tmp_${Date.now()}`,
+        produtoId: '',
+        tamanho: nova.tamanho,
+        cor: nova.cor,
+        custoUnitario: parseFloat(nova.custoUnitario) || 0,
+        precoVenda: parseFloat(nova.precoVenda) || 0,
+        estoque: 0,
+      },
+    ])
+    setNova(EMPTY_VARIANTE)
+  }
+
+  const startEdit = (idx: number) => {
+    const v = localVariantes[idx]
+    setEditIdx(idx)
+    setEditForm({
+      tamanho: v.tamanho, cor: v.cor,
+      custoUnitario: v.custoUnitario.toString(),
+      precoVenda: v.precoVenda.toString(),
+      estoque: v.estoque.toString(),
+    })
+  }
+
+  const saveEdit = () => {
+    if (editIdx === null) return
+    setLocalVariantes((prev) =>
+      prev.map((v, i) =>
+        i === editIdx
+          ? {
+              ...v,
+              tamanho: editForm.tamanho,
+              cor: editForm.cor,
+              custoUnitario: parseFloat(editForm.custoUnitario) || 0,
+              precoVenda: parseFloat(editForm.precoVenda) || 0,
+              estoque: parseInt(editForm.estoque) || 0,
+            }
+          : v
+      )
+    )
+    setEditIdx(null)
+  }
 
   const handleSave = () => {
     const forn = fornecedores.find((f) => f.id === form.fornecedorId)
@@ -330,15 +424,28 @@ function ModalProduto({ editId, onClose }: { editId: string | null; onClose: () 
       categoria:      form.categoria,
       subcategoria:   form.subcategoria,
     }
-    if (editId) updateProduto(editId, p)
-    else addProduto(p)
+
+    if (editId) {
+      updateProduto(editId, p)
+      variantes.filter((v) => v.produtoId === editId).forEach((v) => deleteVariante(v.id))
+      localVariantes.forEach((v) =>
+        addVariante({ produtoId: editId, tamanho: v.tamanho, cor: v.cor, custoUnitario: v.custoUnitario, precoVenda: v.precoVenda, estoque: v.estoque })
+      )
+    } else {
+      addProduto(p)
+      const ps = useStore.getState().produtos
+      const newId = ps[ps.length - 1].id
+      localVariantes.forEach((v) =>
+        addVariante({ produtoId: newId, tamanho: v.tamanho, cor: v.cor, custoUnitario: v.custoUnitario, precoVenda: v.precoVenda, estoque: v.estoque })
+      )
+    }
     onClose()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.5)' }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg"
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         style={{ border: `1px solid ${SAND}` }}>
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: SAND }}>
           <h2 className="font-heading text-xl" style={{ color: COFFEE }}>
@@ -346,6 +453,7 @@ function ModalProduto({ editId, onClose }: { editId: string | null; onClose: () 
           </h2>
           <button onClick={onClose}><X size={20} style={{ color: '#9A7540' }} /></button>
         </div>
+
         <div className="p-6 space-y-4">
           <div>
             <label className="sacra-label">Fornecedor</label>
@@ -357,11 +465,13 @@ function ModalProduto({ editId, onClose }: { editId: string | null; onClose: () 
               ))}
             </select>
           </div>
+
           <div>
             <label className="sacra-label">Descrição do produto</label>
             <input className="sacra-input w-full" placeholder="Ex: T-shirt viscolycra"
               value={form.descricao} onChange={(e) => set('descricao', e.target.value)} />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="sacra-label">Categoria</label>
@@ -377,22 +487,24 @@ function ModalProduto({ editId, onClose }: { editId: string | null; onClose: () 
                 value={form.subcategoria} onChange={(e) => set('subcategoria', e.target.value)} />
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="sacra-label">Preço de Compra (R$)</label>
+              <label className="sacra-label">Preço Base de Compra (R$)</label>
               <input className="sacra-input w-full" type="number" step="0.01" min="0"
                 value={form.precoCompra} onChange={(e) => set('precoCompra', e.target.value)} />
             </div>
             <div>
-              <label className="sacra-label">Preço de Venda (R$)</label>
+              <label className="sacra-label">Preço Base de Venda (R$)</label>
               <input className="sacra-input w-full" type="number" step="0.01" min="0"
                 value={form.precoVenda} onChange={(e) => set('precoVenda', e.target.value)} />
             </div>
           </div>
+
           {venda > 0 && custo > 0 && (
             <div className="rounded-xl p-3 flex justify-between items-center"
               style={{ background: '#FBF7F0', border: `1px solid ${SAND}` }}>
-              <span className="text-sm" style={{ color: COFFEE }}>Margem bruta</span>
+              <span className="text-sm" style={{ color: COFFEE }}>Margem bruta base</span>
               <span className="font-bold text-lg" style={{
                 color: margem >= 50 ? '#166534' : margem >= 35 ? '#92400E' : '#991B1B',
               }}>
@@ -400,6 +512,139 @@ function ModalProduto({ editId, onClose }: { editId: string | null; onClose: () 
               </span>
             </div>
           )}
+
+          {/* Tabela de variantes */}
+          <div>
+            <p className="sacra-label mb-2">Variantes (Tamanho × Cor)</p>
+            <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${SAND}` }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#FBF7F0' }}>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', color: '#9A7540', fontWeight: 600 }}>Tam.</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', color: '#9A7540', fontWeight: 600 }}>Cor</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'right', color: '#9A7540', fontWeight: 600 }}>Custo (R$)</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'right', color: '#9A7540', fontWeight: 600 }}>Venda (R$)</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'right', color: '#9A7540', fontWeight: 600 }}>Estoque</th>
+                    <th style={{ width: 72 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {localVariantes.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '12px', textAlign: 'center', color: '#9A7540', fontSize: 12 }}>
+                        Nenhuma variante. Adicione abaixo.
+                      </td>
+                    </tr>
+                  )}
+                  {localVariantes.map((v, idx) =>
+                    editIdx === idx ? (
+                      <tr key={idx} style={{ borderTop: `1px solid ${SAND}`, background: `${GOLD}08` }}>
+                        <td style={{ padding: '6px 8px' }}>
+                          <select className="sacra-select" style={{ fontSize: 12, padding: '4px 6px' }}
+                            value={editForm.tamanho}
+                            onChange={(e) => setEditForm((f) => ({ ...f, tamanho: e.target.value }))}>
+                            <option value="">—</option>
+                            {TAMANHOS_TODOS.map((t) => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>
+                          <input className="sacra-input" style={{ fontSize: 12, padding: '4px 6px' }}
+                            list="variante-cores" value={editForm.cor}
+                            onChange={(e) => setEditForm((f) => ({ ...f, cor: e.target.value }))} />
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>
+                          <input className="sacra-input" style={{ fontSize: 12, padding: '4px 6px', textAlign: 'right' }}
+                            type="number" step="0.01" min="0" value={editForm.custoUnitario}
+                            onChange={(e) => setEditForm((f) => ({ ...f, custoUnitario: e.target.value }))} />
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>
+                          <input className="sacra-input" style={{ fontSize: 12, padding: '4px 6px', textAlign: 'right' }}
+                            type="number" step="0.01" min="0" value={editForm.precoVenda}
+                            onChange={(e) => setEditForm((f) => ({ ...f, precoVenda: e.target.value }))} />
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>
+                          <input className="sacra-input" style={{ fontSize: 12, padding: '4px 6px', textAlign: 'right' }}
+                            type="number" min="0" value={editForm.estoque}
+                            onChange={(e) => setEditForm((f) => ({ ...f, estoque: e.target.value }))} />
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>
+                          <div className="flex gap-1">
+                            <button type="button" onClick={saveEdit}
+                              style={{ background: '#166534', color: 'white', border: 'none', borderRadius: 6, padding: '3px 8px', fontSize: 13, cursor: 'pointer' }}>✓</button>
+                            <button type="button" onClick={() => setEditIdx(null)}
+                              style={{ background: SAND, color: COFFEE, border: 'none', borderRadius: 6, padding: '3px 8px', fontSize: 13, cursor: 'pointer' }}>✕</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={idx} style={{ borderTop: `1px solid ${SAND}` }}>
+                        <td style={{ padding: '8px 10px', fontWeight: 600, color: GOLD }}>{v.tamanho}</td>
+                        <td style={{ padding: '8px 10px', color: COFFEE }}>{v.cor}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#6B4C2A', fontVariantNumeric: 'tabular-nums' }}>{v.custoUnitario.toFixed(2)}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#6B4C2A', fontVariantNumeric: 'tabular-nums' }}>{v.precoVenda.toFixed(2)}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', color: v.estoque > 0 ? '#166534' : '#9A7540' }}>{v.estoque}</td>
+                        <td style={{ padding: '8px 10px' }}>
+                          <div className="flex gap-1">
+                            <button type="button" onClick={() => startEdit(idx)}
+                              style={{ background: 'transparent', border: `1px solid ${SAND}`, borderRadius: 6, padding: '3px 7px', cursor: 'pointer' }}>
+                              <Pencil size={11} color={COFFEE} />
+                            </button>
+                            <button type="button" onClick={() => setLocalVariantes((prev) => prev.filter((_, i) => i !== idx))}
+                              style={{ background: 'transparent', border: '1px solid #fecaca', borderRadius: 6, padding: '3px 7px', cursor: 'pointer' }}>
+                              <Trash2 size={11} color="#991B1B" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                  {/* Linha de adição */}
+                  <tr style={{ borderTop: `1px solid ${SAND}`, background: `${GOLD}05` }}>
+                    <td style={{ padding: '8px 8px' }}>
+                      <select className="sacra-select" style={{ fontSize: 12, padding: '4px 6px' }}
+                        value={nova.tamanho}
+                        onChange={(e) => setNova((n) => ({ ...n, tamanho: e.target.value }))}>
+                        <option value="">Tam.</option>
+                        {TAMANHOS_TODOS.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </td>
+                    <td style={{ padding: '8px 8px' }}>
+                      <input className="sacra-input" style={{ fontSize: 12, padding: '4px 6px' }}
+                        list="variante-cores" placeholder="Cor" value={nova.cor}
+                        onChange={(e) => setNova((n) => ({ ...n, cor: e.target.value }))} />
+                    </td>
+                    <td style={{ padding: '8px 8px' }}>
+                      <input className="sacra-input" style={{ fontSize: 12, padding: '4px 6px', textAlign: 'right' }}
+                        type="number" step="0.01" min="0" placeholder="0.00" value={nova.custoUnitario}
+                        onChange={(e) => setNova((n) => ({ ...n, custoUnitario: e.target.value }))} />
+                    </td>
+                    <td style={{ padding: '8px 8px' }}>
+                      <input className="sacra-input" style={{ fontSize: 12, padding: '4px 6px', textAlign: 'right' }}
+                        type="number" step="0.01" min="0" placeholder="0.00" value={nova.precoVenda}
+                        onChange={(e) => setNova((n) => ({ ...n, precoVenda: e.target.value }))} />
+                    </td>
+                    <td style={{ padding: '8px 8px', textAlign: 'right', color: '#9A7540', fontSize: 12 }}>0</td>
+                    <td style={{ padding: '8px 8px' }}>
+                      <button type="button" onClick={addLocalVariante}
+                        disabled={!nova.tamanho || !nova.cor}
+                        style={{
+                          background: nova.tamanho && nova.cor ? GOLD : SAND,
+                          color: nova.tamanho && nova.cor ? 'white' : '#9A7540',
+                          border: 'none', borderRadius: 6, padding: '4px 10px',
+                          fontSize: 12, cursor: nova.tamanho && nova.cor ? 'pointer' : 'default',
+                        }}>
+                        + Add
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <datalist id="variante-cores">
+                {CORES_SUGERIDAS.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <button className="btn-secondary" onClick={onClose}>Cancelar</button>
             <button className="btn-primary" onClick={handleSave}
@@ -415,7 +660,7 @@ function ModalProduto({ editId, onClose }: { editId: string | null; onClose: () 
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Produtos() {
-  const { skus, produtos, deleteSKU, deleteProduto } = useStore()
+  const { skus, produtos, variantes, deleteSKU, deleteProduto } = useStore()
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'sku' | 'produto'>('sku')
   const [skuModal,  setSkuModal]  = useState<'new' | string | null>(null) // 'new' | id | null
@@ -458,8 +703,8 @@ export default function Produtos() {
 
       {/* Busca + botão */}
       <div className="flex gap-3 items-center">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9A7540' }} />
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#9A7540' }} />
           <input className="sacra-input pl-9" placeholder="Buscar..."
             value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
@@ -482,6 +727,8 @@ export default function Produtos() {
                 <tr>
                   <th>Fornecedor</th>
                   <th>Produto</th>
+                  <th>Tam.</th>
+                  <th>Cor</th>
                   <th>Bordado</th>
                   <th>Origem</th>
                   <th>Transp.</th>
@@ -496,7 +743,7 @@ export default function Produtos() {
               </thead>
               <tbody>
                 {filteredSKU.length === 0 ? (
-                  <tr><td colSpan={12} className="text-center py-8" style={{ color: '#9A7540' }}>
+                  <tr><td colSpan={14} className="text-center py-8" style={{ color: '#9A7540' }}>
                     Nenhum SKU encontrado
                   </td></tr>
                 ) : filteredSKU.map((s) => {
@@ -505,6 +752,8 @@ export default function Produtos() {
                     <tr key={s.id}>
                       <td className="text-sm font-medium">{s.fornecedor}</td>
                       <td className="text-sm">{s.produto}</td>
+                      <td className="text-xs font-semibold text-center" style={{ color: GOLD }}>{s.tamanho || '—'}</td>
+                      <td className="text-xs" style={{ color: '#6B4C2A' }}>{s.cor || '—'}</td>
                       <td className="text-xs max-w-[130px] truncate" style={{ color: '#6B4C2A' }}>
                         {s.bordado.replace('BORDADO ', '')}
                       </td>
@@ -554,6 +803,8 @@ export default function Produtos() {
                   <th>Produto</th>
                   <th>Fornecedor</th>
                   <th>Categoria</th>
+                  <th>Tamanhos</th>
+                  <th>Cores</th>
                   <th>Custo Compra</th>
                   <th>Preço Venda</th>
                   <th>Margem Bruta</th>
@@ -562,7 +813,7 @@ export default function Produtos() {
               </thead>
               <tbody>
                 {filteredProd.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-8" style={{ color: '#9A7540' }}>
+                  <tr><td colSpan={9} className="text-center py-8" style={{ color: '#9A7540' }}>
                     Nenhum produto encontrado
                   </td></tr>
                 ) : filteredProd.map((p) => {
@@ -580,6 +831,12 @@ export default function Produtos() {
                           }}>
                           {p.subcategoria}
                         </span>
+                      </td>
+                      <td className="text-xs" style={{ color: COFFEE }}>
+                        {[...new Set(variantes.filter((v) => v.produtoId === p.id).map((v) => v.tamanho))].join(' · ') || '—'}
+                      </td>
+                      <td className="text-xs" style={{ color: '#6B4C2A' }}>
+                        {[...new Set(variantes.filter((v) => v.produtoId === p.id).map((v) => v.cor))].join(', ') || '—'}
                       </td>
                       <td>{fmtBRL(p.precoCompra)}</td>
                       <td className="font-semibold">{fmtBRL(p.precoVenda)}</td>

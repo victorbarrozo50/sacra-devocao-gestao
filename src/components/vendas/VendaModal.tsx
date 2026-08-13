@@ -15,6 +15,8 @@ type CartItem = {
   codigoBordado: string
   descricaoBordado: string
   produto: string
+  tamanho: string
+  cor: string
   quantidade: number
   precoUnitario: number
   total: number
@@ -36,10 +38,15 @@ const EMPTY_SHARED: SharedFields = {
   formaPagamento: 'cartao',
 }
 
+const CORES = ['Preto', 'Branco', 'Cinza', 'Azul Marinho', 'Azul', 'Vermelho', 'Rosa', 'Rosa Bebê', 'Lilás', 'Verde', 'Amarelo', 'Laranja', 'Bege', 'Vinho', 'Dourado']
+const TAMANHOS = ['PP', 'P', 'M', 'G', 'GG', 'GGG', 'Único']
+
 const EMPTY_ITEM = {
   codigoBordado: '',
   descricaoBordado: '',
   produto: '',
+  tamanho: '',
+  cor: '',
   quantidade: 1,
   precoUnitario: 0,
 }
@@ -124,6 +131,8 @@ export default function VendaModal({ open, onClose }: VendaModalProps) {
         codigoBordado: ci.codigoBordado,
         descricaoBordado: ci.descricaoBordado,
         produto: ci.produto || undefined,
+        tamanho: ci.tamanho || undefined,
+        cor: ci.cor || undefined,
         quantidade: ci.quantidade,
         precoUnitario: ci.precoUnitario,
         total: ci.total,
@@ -138,6 +147,8 @@ export default function VendaModal({ open, onClose }: VendaModalProps) {
           data: shared.data,
           descricaoBordado: ci.descricaoBordado,
           produto: ci.produto || undefined,
+          tamanho: ci.tamanho || undefined,
+          cor: ci.cor || undefined,
           quantidade: ci.quantidade,
           precoUnitario: ci.precoUnitario,
           total: ci.total,
@@ -312,6 +323,23 @@ export default function VendaModal({ open, onClose }: VendaModalProps) {
                 </select>
               </div>
               <div className="form-group">
+                <label className="form-label">Tamanho</label>
+                <select className="sacra-select" value={item.tamanho}
+                  onChange={(e) => setItem((p) => ({ ...p, tamanho: e.target.value }))}>
+                  <option value="">—</option>
+                  {TAMANHOS.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Cor</label>
+                <input className="sacra-input" list="venda-cores" placeholder="Ex: Azul Marinho"
+                  value={item.cor}
+                  onChange={(e) => setItem((p) => ({ ...p, cor: e.target.value }))} />
+                <datalist id="venda-cores">
+                  {CORES.map((c) => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+              <div className="form-group">
                 <label className="form-label">Quantidade</label>
                 <input type="number" min={1} className="sacra-input" value={item.quantidade}
                   onChange={(e) => setItem((p) => ({ ...p, quantidade: Number(e.target.value) }))} />
@@ -356,7 +384,9 @@ export default function VendaModal({ open, onClose }: VendaModalProps) {
                       <p className="text-sm font-medium truncate" style={{ color: COFFEE }}>
                         {ci.descricaoBordado.replace('BORDADO ', '')}
                       </p>
-                      {ci.produto && <p className="text-xs" style={{ color: '#9A7540' }}>{ci.produto}</p>}
+                      <p className="text-xs" style={{ color: '#9A7540' }}>
+                        {[ci.produto, ci.tamanho, ci.cor].filter(Boolean).join(' · ')}
+                      </p>
                     </div>
                     <div className="text-xs text-right flex-shrink-0" style={{ color: '#9A7540' }}>
                       <p>{ci.quantidade} un × {fmtBRL(ci.precoUnitario)}</p>

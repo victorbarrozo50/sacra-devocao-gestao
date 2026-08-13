@@ -1,16 +1,16 @@
 import { useState, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, LineChart, Line,
+  PieChart, Pie, Cell, Legend, LineChart, Line, ReferenceLine,
 } from 'recharts'
 import {
   Plus, Trash2, Edit2, TrendingUp, TrendingDown, Target,
   DollarSign, ShoppingBag, BarChart2, ArrowUpCircle, ArrowDownCircle,
 } from 'lucide-react'
-import { useStore, calcPontoEquilibrio } from '../hooks/useStore'
+import { useStore, calcPontoEquilibrio, calcDREMeses } from '../hooks/useStore'
 import { fmtBRL, fmtPct, today } from '../utils/format'
 import Modal from '../components/ui/Modal'
-import type { CustoFixo, ItemMix, MovimentacaoCaixa } from '../types'
+import type { CustoFixo, ItemMix, MovimentacaoCaixa, LancamentoPD } from '../types'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const GOLD   = '#C0955A'
@@ -61,6 +61,13 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 // ─── EMPTY forms ──────────────────────────────────────────────────────────────
+const EMPTY_PD: Omit<LancamentoPD, 'id'> = {
+  data: '',
+  tipo: 'presente',
+  descricao: '',
+  valor: 0,
+}
+
 const EMPTY_SAIDA: Omit<MovimentacaoCaixa, 'id'> = {
   data: today(),
   descricao: '',
@@ -70,7 +77,7 @@ const EMPTY_SAIDA: Omit<MovimentacaoCaixa, 'id'> = {
 
 const EMPTY_MIX: Omit<ItemMix, 'id'> = {
   produto: '', fornecedor: '', quantidade: 0, precoVenda: 0,
-  custoCompra: 0, custoBordado: 0, custoEmbalagem: 3.20,
+  custoCompra: 0, custoBordado: 0, custoEmbalagem: 4.00,
   margemContribuicao: 0, margemPercent: 0, faturamento: 0,
 }
 
@@ -79,12 +86,18 @@ const EMPTY_CUSTO: Omit<CustoFixo, 'id'> = { categoria: '', descricao: '', valor
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function HubFinanceiro() {
   const {
-    vendas, custosFixos, parametros, mixProdutos, dreMeses,
+    vendas, compras, custosFixos, parametros, mixProdutos,
     movimentacoes, addMovimentacao, deleteMovimentacao,
     addCustoFixo, updateCustoFixo, deleteCustoFixo,
     addItemMix, updateItemMix, deleteItemMix,
     updateParametros,
+    lancamentosPD, addLancamentoPD, deleteLancamentoPD,
   } = useStore()
+
+  const dreMeses = useMemo(
+    () => calcDREMeses(vendas, compras, custosFixos, parametros),
+    [vendas, compras, custosFixos, parametros]
+  )
 
   const [tab, setTab] = useState<Tab>('dashboard')
   const [mesSelecionado, setMesSelecionado] = useState(mesAtual())
@@ -103,6 +116,10 @@ export default function HubFinanceiro() {
 
   const [modalMeta, setModalMeta] = useState(false)
   const [metaInput, setMetaInput] = useState(String(parametros.metaMensal ?? 15000))
+
+  const [modalPD, setModalPD] = useState(false)
+  const [formPD, setFormPD] = useState<Omit<LancamentoPD, 'id'>>({ ...EMPTY_PD, data: mesAtual() + '-01' })
+  const [limitePDInput, setLimitePDInput] = useState(String(parametros.limitePresenteDoacao ?? 300))
 
   // ── Derived — período ──────────────────────────────────────────────────────
   const vendasMes = useMemo(
@@ -171,7 +188,18 @@ export default function HubFinanceiro() {
     [movimentacoes, mesSelecionado]
   )
   const totalSaidas = saidasMes.reduce((s, m) => s + m.valor, 0)
-  const saldoCaixa = faturamentoMes - totalSaidas
+
+  const totalComprasMes = useMemo(() => {
+    return compras
+      .filter((c) =>
+        c.dataPedido.startsWith(mesSelecionado) &&
+        c.status !== 'aguardando' &&
+        c.status !== 'cancelado'
+      )
+      .reduce((s, c) => s + c.valorTotal + (c.frete ?? 0), 0)
+  }, [compras, mesSelecionado])
+
+  const saldoCaixa = faturamentoMes - totalSaidas - totalComprasMes
 
   // Unified timeline for cash flow display
   const timelineCaixa = useMemo(() => {
@@ -337,7 +365,7 @@ export default function HubFinanceiro() {
               >
                 {fmtBRL(saldoCaixa)}
               </p>
-              <p className="kpi-sub">entradas − saídas</p>
+              <p className="kpi-sub">entradas − saídas − compras</p>
             </div>
           </div>
 
@@ -435,11 +463,11 @@ export default function HubFinanceiro() {
                   <BarChart
                     data={rankingPecas.slice(0, 6).map((p) => ({ name: p.nome.replace('BORDADO ', '').slice(0, 18), fat: p.fat }))}
                     layout="vertical"
-                    margin={{ top: 0, right: 12, left: 0, bottom: 0 }}
+                    margin={{ top: 0, right: 16, left: 4, bottom: 0 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke={SAND} horizontal={false} />
-                    <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 10, fill: '#6B4C2A' }} />
-                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10, fill: '#6B4C2A' }} />
+                    <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 9, fill: '#6B4C2A' }} tickCount={4} />
+                    <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 9, fill: '#6B4C2A' }} />
                     <Tooltip content={<ChartTooltip />} />
                     <Bar dataKey="fat" name="Faturamento" fill={GOLD} radius={[0, 4, 4, 0]} />
                   </BarChart>
@@ -600,11 +628,11 @@ export default function HubFinanceiro() {
                   faturamento: i.faturamento,
                   mc: +(i.margemContribuicao * i.quantidade).toFixed(2),
                 }))}
-                margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+                margin={{ top: 4, right: 8, left: 4, bottom: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke={SAND} />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6B4C2A' }} />
-                <YAxis tick={{ fontSize: 10, fill: '#6B4C2A' }} tickFormatter={(v) => fmtBRL(v)} width={75} />
+                <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#6B4C2A' }} interval={0} />
+                <YAxis tick={{ fontSize: 9, fill: '#6B4C2A' }} tickFormatter={(v) => fmtBRL(v)} width={80} />
                 <Tooltip content={<ChartTooltip />} />
                 <Bar dataKey="faturamento" name="Faturamento" fill={GOLD} radius={[4, 4, 0, 0]} />
                 <Bar dataKey="mc" name="Margem Contribuição" fill={COFFEE} radius={[4, 4, 0, 0]} />
@@ -791,10 +819,10 @@ export default function HubFinanceiro() {
             <h3 className="font-heading font-semibold" style={{ color: COFFEE }}>DRE Simplificada — Regime MEI</h3>
             <div className="card">
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={dreMeses} margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+                <LineChart data={dreMeses} margin={{ top: 4, right: 16, left: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={SAND} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#6B4C2A' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#6B4C2A' }} tickFormatter={(v) => fmtBRL(v)} width={80} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#6B4C2A' }} tickFormatter={(v) => { const [y,m]=v.split('-'); const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; return `${meses[+m-1]}/${y.slice(2)}` }} />
+                  <YAxis tick={{ fontSize: 9, fill: '#6B4C2A' }} tickFormatter={(v) => fmtBRL(v)} width={82} />
                   <Tooltip content={<ChartTooltip />} />
                   <Line type="monotone" dataKey="receitaBruta" name="Receita Bruta" stroke={GOLD} strokeWidth={2} />
                   <Line type="monotone" dataKey="margemContribuicao" name="Margem Contrib." stroke="#C0955A90" strokeWidth={2} strokeDasharray="5 3" />
@@ -845,6 +873,168 @@ export default function HubFinanceiro() {
               </div>
             </div>
           </div>
+
+          {/* Presentes & Doações */}
+          {(() => {
+            const limitePD = parametros.limitePresenteDoacao ?? 300
+            const pdMes = lancamentosPD.filter(l => l.data.startsWith(mesSelecionado))
+            const totalPresentes = pdMes.filter(l => l.tipo === 'presente').reduce((s, l) => s + l.valor, 0)
+            const totalDoacoes = pdMes.filter(l => l.tipo === 'doacao').reduce((s, l) => s + l.valor, 0)
+            const totalPD = totalPresentes + totalDoacoes
+            const pctUsado = limitePD > 0 ? Math.min((totalPD / limitePD) * 100, 100) : 0
+
+            const chartData = (() => {
+              const meses = [...new Set(lancamentosPD.map(l => l.data.slice(0, 7)))].sort().slice(-6)
+              if (meses.length === 0) return []
+              return meses.map(mes => ({
+                mes: fmtMesLabel(mes),
+                presentes: lancamentosPD.filter(l => l.data.startsWith(mes) && l.tipo === 'presente').reduce((s, l) => s + l.valor, 0),
+                doacoes: lancamentosPD.filter(l => l.data.startsWith(mes) && l.tipo === 'doacao').reduce((s, l) => s + l.valor, 0),
+              }))
+            })()
+
+            return (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-heading font-semibold" style={{ color: COFFEE }}>Presentes & Doações</h3>
+                  <div className="flex gap-2">
+                    <button
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                      style={{ background: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}40` }}
+                      onClick={() => { setLimitePDInput(String(limitePD)); updateParametros({ limitePresenteDoacao: Number(limitePDInput) }) }}
+                    >
+                      Limite: {fmtBRL(limitePD)}/mês
+                    </button>
+                    <button className="btn-primary text-xs px-3 py-1.5" onClick={() => { setFormPD({ ...EMPTY_PD, data: mesSelecionado + '-01' }); setModalPD(true) }}>
+                      <Plus size={13} /> Novo Lançamento
+                    </button>
+                  </div>
+                </div>
+
+                {/* KPI + progress */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="kpi-card">
+                    <p className="kpi-label">Presentes</p>
+                    <p className="kpi-value text-xl">{fmtBRL(totalPresentes)}</p>
+                    <p className="kpi-sub">{pdMes.filter(l => l.tipo === 'presente').length} lançamentos</p>
+                  </div>
+                  <div className="kpi-card">
+                    <p className="kpi-label">Doações</p>
+                    <p className="kpi-value text-xl">{fmtBRL(totalDoacoes)}</p>
+                    <p className="kpi-sub">{pdMes.filter(l => l.tipo === 'doacao').length} lançamentos</p>
+                  </div>
+                  <div className="kpi-card">
+                    <p className="kpi-label">Total / Limite</p>
+                    <p className="kpi-value text-xl" style={{ color: totalPD > limitePD ? '#991B1B' : COFFEE }}>{fmtBRL(totalPD)}</p>
+                    <p className="kpi-sub">{pctUsado.toFixed(0)}% do limite</p>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="card">
+                  <div className="flex justify-between text-xs mb-2" style={{ color: COFFEE }}>
+                    <span>Uso do limite mensal</span>
+                    <span style={{ color: totalPD > limitePD ? '#991B1B' : '#16A34A' }}>
+                      {fmtBRL(totalPD)} / {fmtBRL(limitePD)}
+                    </span>
+                  </div>
+                  <div className="h-3 rounded-full overflow-hidden" style={{ background: SAND }}>
+                    <div
+                      className="h-3 rounded-full transition-all"
+                      style={{ width: `${pctUsado}%`, background: totalPD > limitePD ? '#991B1B' : GOLD }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs mt-1.5">
+                    <button
+                      className="underline"
+                      style={{ color: GOLD }}
+                      onClick={() => { setLimitePDInput(String(limitePD)); setModalPD(false) }}
+                      onDoubleClick={() => {
+                        const v = prompt('Novo limite mensal (R$):', String(limitePD))
+                        if (v !== null) updateParametros({ limitePresenteDoacao: Number(v) })
+                      }}
+                    >
+                      ✏️ Alterar limite (duplo clique)
+                    </button>
+                    <span style={{ color: '#9A7540' }}>{(limitePD - totalPD) > 0 ? `${fmtBRL(limitePD - totalPD)} disponível` : 'Limite atingido'}</span>
+                  </div>
+                </div>
+
+                {/* Chart */}
+                {chartData.length > 0 && (
+                  <div className="card">
+                    <p className="text-xs font-semibold mb-3" style={{ color: COFFEE, opacity: 0.6 }}>
+                      Histórico de gastos (últimos 6 meses)
+                    </p>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={SAND} />
+                        <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#6B4C2A' }} />
+                        <YAxis tick={{ fontSize: 10, fill: '#6B4C2A' }} tickFormatter={(v) => fmtBRL(v)} width={72} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <ReferenceLine y={limitePD} stroke="#991B1B" strokeDasharray="4 2" label={{ value: 'Limite', position: 'right', fontSize: 10, fill: '#991B1B' }} />
+                        <Bar dataKey="presentes" name="Presentes" fill={GOLD} radius={[4, 4, 0, 0]} stackId="pd" />
+                        <Bar dataKey="doacoes" name="Doações" fill={COFFEE} radius={[4, 4, 0, 0]} stackId="pd" />
+                        <Legend formatter={(v) => <span style={{ color: COFFEE, fontSize: 11 }}>{v}</span>} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Entries list */}
+                {pdMes.length > 0 && (
+                  <div className="card p-0 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="sacra-table">
+                        <thead>
+                          <tr>
+                            <th>Data</th>
+                            <th>Tipo</th>
+                            <th>Descrição</th>
+                            <th>Valor</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pdMes.sort((a, b) => b.data.localeCompare(a.data)).map((l) => (
+                            <tr key={l.id}>
+                              <td className="text-xs">{l.data}</td>
+                              <td>
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                                  style={{
+                                    background: l.tipo === 'presente' ? `${GOLD}20` : `${COFFEE}15`,
+                                    color: l.tipo === 'presente' ? GOLD : COFFEE,
+                                  }}
+                                >
+                                  {l.tipo === 'presente' ? '🎁 Presente' : '🤝 Doação'}
+                                </span>
+                              </td>
+                              <td className="text-sm">{l.descricao}</td>
+                              <td className="font-semibold">{fmtBRL(l.valor)}</td>
+                              <td>
+                                <button className="btn-danger p-1" onClick={() => deleteLancamentoPD(l.id)}>
+                                  <Trash2 size={12} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {pdMes.length === 0 && (
+                  <div className="card text-center py-6">
+                    <p className="text-sm" style={{ color: COFFEE, opacity: 0.4 }}>
+                      Nenhum lançamento em {fmtMesLabel(mesSelecionado)}. Use o botão para registrar.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Parâmetros de custeio */}
           <div className="space-y-3">
@@ -911,6 +1101,48 @@ export default function HubFinanceiro() {
       )}
 
       {/* ═══ MODALS ═══════════════════════════════════════════════════════════ */}
+
+      {/* Presentes & Doações — novo lançamento */}
+      <Modal
+        open={modalPD}
+        onClose={() => setModalPD(false)}
+        title="Novo Lançamento — Presentes & Doações"
+        size="sm"
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setModalPD(false)}>Cancelar</button>
+            <button
+              className="btn-primary"
+              disabled={!formPD.descricao || formPD.valor <= 0 || !formPD.data}
+              onClick={() => { addLancamentoPD(formPD); setModalPD(false); setFormPD({ ...EMPTY_PD, data: mesSelecionado + '-01' }) }}
+            >
+              Salvar
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="form-group">
+            <label className="form-label">Data</label>
+            <input type="date" className="sacra-input" value={formPD.data} onChange={(e) => setFormPD((p) => ({ ...p, data: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Tipo</label>
+            <select className="sacra-select" value={formPD.tipo} onChange={(e) => setFormPD((p) => ({ ...p, tipo: e.target.value as 'presente' | 'doacao' }))}>
+              <option value="presente">🎁 Presente</option>
+              <option value="doacao">🤝 Doação</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Descrição</label>
+            <input className="sacra-input" placeholder="Ex: Presente de aniversário cliente, Doação creche..." value={formPD.descricao} onChange={(e) => setFormPD((p) => ({ ...p, descricao: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Valor (R$)</label>
+            <input type="number" step="0.01" min="0" className="sacra-input" value={formPD.valor || ''} onChange={(e) => setFormPD((p) => ({ ...p, valor: Number(e.target.value) }))} />
+          </div>
+        </div>
+      </Modal>
 
       {/* Meta mensal */}
       <Modal

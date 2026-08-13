@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, ChevronRight, Trash2, CheckCircle2, Package, AlertCircle, X } from 'lucide-react'
+import { Plus, ChevronRight, Trash2, CheckCircle2, Package, AlertCircle, X, QrCode } from 'lucide-react'
 import { useStore } from '../hooks/useStore'
 import { fmtBRL, fmtDate, today } from '../utils/format'
 import Modal from '../components/ui/Modal'
@@ -15,10 +15,14 @@ const STATUS_FLOW: StatusCompra[] = [
   'aguardando', 'compra_solicitada', 'produto_recebido', 'bordado_em_andamento', 'concluido',
 ]
 
+const CORES = ['Preto', 'Branco', 'Cinza', 'Azul Marinho', 'Azul', 'Vermelho', 'Rosa', 'Rosa Bebê', 'Lilás', 'Verde', 'Amarelo', 'Laranja', 'Bege', 'Vinho', 'Dourado']
+
 const EMPTY: Omit<Compra, 'id'> = {
   dataPedido: today(),
   fornecedor: '',
   produto: '',
+  tamanho: '',
+  cor: '',
   bordado: '',
   qtdPP: 0, qtdP: 0, qtdM: 0, qtdG: 0, qtdGG: 0, qtdTotal: 0,
   precoUnitario: 0,
@@ -26,6 +30,10 @@ const EMPTY: Omit<Compra, 'id'> = {
   frete: 0,
   status: 'aguardando',
   observacoes: '',
+}
+
+function diffDays(a: string, b: string): number {
+  return Math.round(Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 86400000)
 }
 
 function custoRealTotal(c: Compra) {
@@ -56,6 +64,9 @@ export default function Compras() {
   const [filtroPeca, setFiltroPeca] = useState('')
   const [filtroFornecedor, setFiltroFornecedor] = useState('')
   const [filtroBordado, setFiltroBordado] = useState('')
+
+  const [qrCompraId, setQrCompraId] = useState<string | null>(null)
+  const [qrGeralOpen, setQrGeralOpen] = useState(false)
 
   // Bordado inline edit (produto_recebido step)
   const [bordadoEdit, setBordadoEdit] = useState<Record<string, string>>({})
@@ -114,11 +125,45 @@ export default function Compras() {
     return idx < STATUS_FLOW.length - 1 ? STATUS_FLOW[idx + 1] : null
   }
 
+  function handleAvancarStatus(c: Compra, ns: StatusCompra) {
+    const now = new Date().toISOString().slice(0, 10)
+    if (ns === 'produto_recebido') {
+      updateCompra(c.id, { status: ns, dataEntregaProduto: now, leadTimeProduto: diffDays(now, c.dataPedido) })
+    } else if (ns === 'concluido') {
+      const ref = c.dataEntregaProduto ?? c.dataPedido
+      updateCompra(c.id, { status: ns, dataEntregaBordado: now, leadTimeBordado: diffDays(now, ref), adicionadoAoEstoque: true })
+    } else {
+      updateStatusCompra(c.id, ns)
+    }
+  }
+
+  const leadTimeAnalysis = useMemo(() => {
+    const byForn: Record<string, { produto: number[]; bordado: number[] }> = {}
+    compras.forEach(c => {
+      if (!byForn[c.fornecedor]) byForn[c.fornecedor] = { produto: [], bordado: [] }
+      if (c.leadTimeProduto) byForn[c.fornecedor].produto.push(c.leadTimeProduto)
+      if (c.leadTimeBordado) byForn[c.fornecedor].bordado.push(c.leadTimeBordado)
+    })
+    return Object.entries(byForn)
+      .filter(([, d]) => d.produto.length > 0 || d.bordado.length > 0)
+      .map(([nome, d]) => ({
+        nome,
+        ltProduto: d.produto.length > 0 ? Math.round(d.produto.reduce((a, b) => a + b, 0) / d.produto.length) : null,
+        ltBordado: d.bordado.length > 0 ? Math.round(d.bordado.reduce((a, b) => a + b, 0) / d.bordado.length) : null,
+        n: Math.max(d.produto.length, d.bordado.length),
+      }))
+      .sort((a, b) => b.n - a.n)
+  }, [compras])
+
   function handleConfirmarBordado(c: Compra) {
     const novoDesc = bordadoEdit[c.id]
     if (!novoDesc) return
     const bordadoObj = bordados.find((b) => b.descricao === novoDesc)
-    updateCompra(c.id, { bordado: novoDesc, custoBordado: bordadoObj?.custoUnitario ?? 0 })
+    updateCompra(c.id, {
+      bordado: novoDesc,
+      codigoBordado: bordadoObj?.codigo,
+      custoBordado: bordadoObj?.custoUnitario ?? 0,
+    })
     setBordadoEdit((prev) => {
       const next = { ...prev }
       delete next[c.id]
@@ -160,6 +205,46 @@ export default function Compras() {
         </div>
       </div>
 
+      {/* Lead time por fornecedor */}
+      {leadTimeAnalysis.length > 0 && (
+        <div className="card">
+          <p className="section-title mb-3">Lead Time por Fornecedor</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${SAND}` }}>
+                  <th className="text-left pb-2 font-semibold text-xs uppercase tracking-wide" style={{ color: COFFEE, opacity: 0.5 }}>Fornecedor</th>
+                  <th className="text-right pb-2 font-semibold text-xs uppercase tracking-wide" style={{ color: COFFEE, opacity: 0.5 }}>Produto (média)</th>
+                  <th className="text-right pb-2 font-semibold text-xs uppercase tracking-wide" style={{ color: COFFEE, opacity: 0.5 }}>Bordado (média)</th>
+                  <th className="text-right pb-2 font-semibold text-xs uppercase tracking-wide" style={{ color: COFFEE, opacity: 0.5 }}>Amostras</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leadTimeAnalysis.map(row => (
+                  <tr key={row.nome} style={{ borderBottom: `1px solid ${SAND}40` }}>
+                    <td className="py-2 font-medium" style={{ color: COFFEE }}>{row.nome}</td>
+                    <td className="py-2 text-right">
+                      {row.ltProduto != null
+                        ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: `${GOLD}18`, color: GOLD }}>{row.ltProduto}d</span>
+                        : <span style={{ color: COFFEE, opacity: 0.3 }}>—</span>}
+                    </td>
+                    <td className="py-2 text-right">
+                      {row.ltBordado != null
+                        ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: '#16A34A18', color: '#16A34A' }}>{row.ltBordado}d</span>
+                        : <span style={{ color: COFFEE, opacity: 0.3 }}>—</span>}
+                    </td>
+                    <td className="py-2 text-right text-xs" style={{ color: COFFEE, opacity: 0.5 }}>{row.n}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs mt-2" style={{ color: COFFEE, opacity: 0.4 }}>
+            Calculado automaticamente a partir das movimentações reais de cada pedido.
+          </p>
+        </div>
+      )}
+
       {/* Status filter + Add button */}
       <div className="flex flex-wrap gap-2 items-center justify-between">
         <div className="flex flex-wrap gap-2">
@@ -183,9 +268,17 @@ export default function Compras() {
             </button>
           ))}
         </div>
-        <button className="btn-primary" onClick={() => setModalOpen(true)}>
-          <Plus size={15} /> Nova Compra
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="btn-secondary text-xs px-3 py-1.5"
+            onClick={() => setQrGeralOpen(true)}
+          >
+            <QrCode size={14} /> QR Geral
+          </button>
+          <button className="btn-primary" onClick={() => setModalOpen(true)}>
+            <Plus size={15} /> Nova Compra
+          </button>
+        </div>
       </div>
 
       {/* Search filters */}
@@ -509,11 +602,11 @@ export default function Compras() {
               )}
 
               {/* Actions */}
-              <div className="flex gap-2 mt-3">
+              <div className="flex flex-wrap gap-2 mt-3">
                 {ns && (
                   <button
                     className="btn-secondary text-xs px-3 py-1.5"
-                    onClick={() => updateStatusCompra(c.id, ns)}
+                    onClick={() => handleAvancarStatus(c, ns)}
                   >
                     <ChevronRight size={13} />
                     Avançar para: {ns === 'compra_solicitada' ? 'Compra Solicitada'
@@ -522,6 +615,13 @@ export default function Compras() {
                       : 'Concluído'}
                   </button>
                 )}
+                <button
+                  className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 font-medium transition-colors"
+                  style={{ background: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}40` }}
+                  onClick={() => setQrCompraId(c.id)}
+                >
+                  <QrCode size={13} /> QR Operação
+                </button>
                 <button className="btn-danger" onClick={() => deleteCompra(c.id)}>
                   <Trash2 size={13} /> Excluir
                 </button>
@@ -530,6 +630,96 @@ export default function Compras() {
           )
         })}
       </div>
+
+      {/* QR Geral Compras */}
+      {qrGeralOpen && (() => {
+        const url = `${window.location.origin}/qr/compras`
+        const img = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+            onClick={() => setQrGeralOpen(false)}
+          >
+            <div
+              className="rounded-2xl shadow-2xl p-6 text-center max-w-xs w-full"
+              style={{ background: CREAM, border: `1px solid ${SAND}` }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: GOLD }}>
+                QR Geral
+              </p>
+              <p className="font-heading font-bold text-base mb-0.5" style={{ color: COFFEE }}>
+                Compras em Andamento
+              </p>
+              <p className="text-xs mb-4" style={{ color: '#9A7540' }}>
+                {emAberto.length} pedido{emAberto.length !== 1 ? 's' : ''} ativo{emAberto.length !== 1 ? 's' : ''}
+              </p>
+              <div className="flex justify-center mb-4">
+                <img src={img} alt="QR Code" className="w-44 h-44 rounded-xl" style={{ border: `2px solid ${SAND}` }} />
+              </div>
+              <p className="text-xs mb-4" style={{ color: '#9A7540' }}>
+                Escaneie para ver e avançar todas as compras pelo celular
+              </p>
+              <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium" style={{ color: GOLD }}>
+                Abrir página →
+              </a>
+              <div className="mt-4">
+                <button className="btn-secondary text-xs w-full" onClick={() => setQrGeralOpen(false)}>Fechar</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* QR Modal */}
+      {qrCompraId && (() => {
+        const c = compras.find((x) => x.id === qrCompraId)
+        if (!c) return null
+        const qrUrl = `${window.location.origin}/qr/compra/${c.id}`
+        const imgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+            onClick={() => setQrCompraId(null)}
+          >
+            <div
+              className="rounded-2xl shadow-2xl p-6 text-center max-w-xs w-full"
+              style={{ background: CREAM, border: `1px solid ${SAND}` }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: GOLD }}>
+                QR Operação
+              </p>
+              <p className="font-heading font-bold text-base mb-0.5" style={{ color: COFFEE }}>
+                {c.bordado || c.produto}
+              </p>
+              <p className="text-xs mb-4" style={{ color: '#9A7540' }}>{c.fornecedor}</p>
+              <div className="flex justify-center mb-4">
+                <img src={imgUrl} alt="QR Code" className="w-44 h-44 rounded-xl" style={{ border: `2px solid ${SAND}` }} />
+              </div>
+              <p className="text-xs mb-4" style={{ color: '#9A7540' }}>
+                Escaneie para acompanhar e avançar o status deste pedido
+              </p>
+              <a
+                href={qrUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium"
+                style={{ color: GOLD }}
+              >
+                Abrir página →
+              </a>
+              <div className="mt-4">
+                <button className="btn-secondary text-xs w-full" onClick={() => setQrCompraId(null)}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Modal — Novo Pedido */}
       <Modal
@@ -568,6 +758,43 @@ export default function Compras() {
             </div>
           </div>
 
+          {/* Lead time dates */}
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Previsão Entrega Produto</label>
+              <input
+                type="date"
+                className="sacra-input"
+                value={form.dataEntregaProduto ?? ''}
+                onChange={(e) => {
+                  const d = e.target.value
+                  const lt = d && form.dataPedido ? Math.round((new Date(d).getTime() - new Date(form.dataPedido).getTime()) / 86400000) : undefined
+                  setForm((p) => ({ ...p, dataEntregaProduto: d || undefined, leadTimeProduto: lt }))
+                }}
+              />
+              {form.leadTimeProduto != null && form.leadTimeProduto > 0 && (
+                <p className="text-xs mt-1" style={{ color: '#9A7540' }}>Lead time produto: {form.leadTimeProduto} dias</p>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label">Previsão Entrega Bordado</label>
+              <input
+                type="date"
+                className="sacra-input"
+                value={form.dataEntregaBordado ?? ''}
+                onChange={(e) => {
+                  const d = e.target.value
+                  const ref = form.dataEntregaProduto ?? form.dataPedido
+                  const lt = d && ref ? Math.round((new Date(d).getTime() - new Date(ref).getTime()) / 86400000) : undefined
+                  setForm((p) => ({ ...p, dataEntregaBordado: d || undefined, leadTimeBordado: lt }))
+                }}
+              />
+              {form.leadTimeBordado != null && form.leadTimeBordado > 0 && (
+                <p className="text-xs mt-1" style={{ color: '#9A7540' }}>Lead time bordado: {form.leadTimeBordado} dias</p>
+              )}
+            </div>
+          </div>
+
           {/* Frete — aparece quando fornecedor selecionado */}
           {form.fornecedor && (
             <div className="form-group">
@@ -584,20 +811,35 @@ export default function Compras() {
             </div>
           )}
 
-          <div className="form-group">
-            <label className="form-label">Produto</label>
-            <select
-              className="sacra-select"
-              value={form.produto}
-              onChange={(e) => setField('produto', e.target.value)}
-            >
-              <option value="">Selecionar...</option>
-              {produtos
-                .filter((p) => !form.fornecedor || p.fornecedorNome === form.fornecedor)
-                .map((p) => (
-                  <option key={p.id} value={p.descricao}>{p.descricao}</option>
-                ))}
-            </select>
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Produto</label>
+              <select
+                className="sacra-select"
+                value={form.produto}
+                onChange={(e) => setField('produto', e.target.value)}
+              >
+                <option value="">Selecionar...</option>
+                {produtos
+                  .filter((p) => !form.fornecedor || p.fornecedorNome === form.fornecedor)
+                  .map((p) => (
+                    <option key={p.id} value={p.descricao}>{p.descricao}</option>
+                  ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Cor</label>
+              <input
+                className="sacra-input"
+                list="compra-cores"
+                placeholder="Ex: Preto, Azul..."
+                value={form.cor ?? ''}
+                onChange={(e) => setField('cor', e.target.value)}
+              />
+              <datalist id="compra-cores">
+                {CORES.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
           </div>
 
           <div className="form-group">

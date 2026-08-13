@@ -2,6 +2,7 @@ import type {
   Bordado,
   Fornecedor,
   Produto,
+  ProdutoVariante,
   SKU,
   Venda,
   Compra,
@@ -14,6 +15,7 @@ import type {
   DREMes,
   Evento,
   MovimentacaoCaixa,
+  Funcionario,
 } from '../types'
 
 // ─── Bordados (top designs from RESUMO POR BORDADO) ─────────────────────────
@@ -83,6 +85,30 @@ export const mockProdutos: Produto[] = [
   { id: 'p14', fornecedorId: 'f5', fornecedorNome: 'Lomani', descricao: 'Regata algodão', precoCompra: 25, precoVenda: 80, categoria: 'vestuario', subcategoria: 'Regatas' },
 ]
 
+// ─── Variantes (Tamanho × Cor) ───────────────────────────────────────────────
+export const mockVariantes: ProdutoVariante[] = [
+  // T-shirt viscolycra (p4)
+  { id: 'var1',  produtoId: 'p4', tamanho: 'PP', cor: 'Preto',       custoUnitario: 31.90, precoVenda: 135, estoque: 8 },
+  { id: 'var2',  produtoId: 'p4', tamanho: 'PP', cor: 'Branco',      custoUnitario: 31.90, precoVenda: 135, estoque: 5 },
+  { id: 'var3',  produtoId: 'p4', tamanho: 'P',  cor: 'Preto',       custoUnitario: 31.90, precoVenda: 135, estoque: 12 },
+  { id: 'var4',  produtoId: 'p4', tamanho: 'P',  cor: 'Branco',      custoUnitario: 31.90, precoVenda: 135, estoque: 9 },
+  { id: 'var5',  produtoId: 'p4', tamanho: 'M',  cor: 'Preto',       custoUnitario: 31.90, precoVenda: 135, estoque: 15 },
+  { id: 'var6',  produtoId: 'p4', tamanho: 'M',  cor: 'Branco',      custoUnitario: 31.90, precoVenda: 135, estoque: 11 },
+  { id: 'var7',  produtoId: 'p4', tamanho: 'G',  cor: 'Preto',       custoUnitario: 31.90, precoVenda: 135, estoque: 7 },
+  { id: 'var8',  produtoId: 'p4', tamanho: 'G',  cor: 'Azul Marinho', custoUnitario: 31.90, precoVenda: 135, estoque: 4 },
+  { id: 'var9',  produtoId: 'p4', tamanho: 'GG', cor: 'Preto',       custoUnitario: 31.90, precoVenda: 135, estoque: 0 },
+  // Blusa de seda (p7)
+  { id: 'var10', produtoId: 'p7', tamanho: 'P',  cor: 'Rosa',        custoUnitario: 95, precoVenda: 280, estoque: 3 },
+  { id: 'var11', produtoId: 'p7', tamanho: 'M',  cor: 'Rosa',        custoUnitario: 95, precoVenda: 280, estoque: 6 },
+  { id: 'var12', produtoId: 'p7', tamanho: 'M',  cor: 'Vinho',       custoUnitario: 95, precoVenda: 280, estoque: 4 },
+  { id: 'var13', produtoId: 'p7', tamanho: 'G',  cor: 'Vinho',       custoUnitario: 95, precoVenda: 280, estoque: 2 },
+  // Regata feminina (p6)
+  { id: 'var14', produtoId: 'p6', tamanho: 'PP', cor: 'Branco',      custoUnitario: 28, precoVenda: 90, estoque: 10 },
+  { id: 'var15', produtoId: 'p6', tamanho: 'P',  cor: 'Branco',      custoUnitario: 28, precoVenda: 90, estoque: 8 },
+  { id: 'var16', produtoId: 'p6', tamanho: 'M',  cor: 'Bege',        custoUnitario: 28, precoVenda: 90, estoque: 5 },
+  { id: 'var17', produtoId: 'p6', tamanho: 'G',  cor: 'Bege',        custoUnitario: 28, precoVenda: 90, estoque: 0 },
+]
+
 // ─── SKUs (Base de Dados) ────────────────────────────────────────────────────
 export const mockSKUs: SKU[] = [
   { id: 's1', fornecedor: 'Bia Chacon', produto: 'Tricoline manga curta', valorUnitario: 60, origem: 'Natal-RN', transportadora: 'Jadlog', bordado: 'BORDADO APARECIDA', precoMedio: 15.97, precoVenda: 210, margem: 55 },
@@ -118,39 +144,69 @@ export const mockVendas: Venda[] = [
 export const mockCompras: Compra[] = [
   {
     id: 'c1', dataPedido: '2026-06-01', fornecedor: 'Bia Chacon', produto: 'Tricoline manga curta',
-    bordado: 'BORDADO APARECIDA', qtdPP: 5, qtdP: 10, qtdM: 15, qtdG: 10, qtdGG: 5, qtdTotal: 45,
-    precoUnitario: 60, valorTotal: 2700, status: 'concluido',
+    tamanho: 'M', cor: 'Branco',
+    bordado: 'BORDADO APARECIDA', qtdTotal: 45,
+    precoUnitario: 60, valorTotal: 2700, custoBordado: 15.97, frete: 180, status: 'concluido',
     dataEntregaProduto: '2026-06-14', dataEntregaBordado: '2026-06-20',
-    leadTimeProduto: 13, leadTimeBordado: 6, observacoes: '',
+    leadTimeProduto: 13, leadTimeBordado: 6, observacoes: '', adicionadoAoEstoque: true,
   },
   {
     id: 'c2', dataPedido: '2026-06-10', fornecedor: 'Lomani', produto: 'T-shirt algodão premium',
-    bordado: 'BORDADO NOSSA SENHORA GRAÇAS', qtdPP: 8, qtdP: 12, qtdM: 20, qtdG: 12, qtdGG: 8, qtdTotal: 60,
-    precoUnitario: 38, valorTotal: 2280, status: 'concluido',
+    tamanho: 'G', cor: 'Preto',
+    bordado: 'BORDADO NOSSA SENHORA GRAÇAS', qtdTotal: 60,
+    precoUnitario: 38, valorTotal: 2280, custoBordado: 18.20, frete: 120, status: 'concluido',
     dataEntregaProduto: '2026-06-20', dataEntregaBordado: '2026-06-28',
-    leadTimeProduto: 10, leadTimeBordado: 8, observacoes: '',
+    leadTimeProduto: 10, leadTimeBordado: 8, observacoes: '', adicionadoAoEstoque: true,
+  },
+  {
+    id: 'c7', dataPedido: '2026-05-10', fornecedor: 'Lessi', produto: 'Blusa de seda',
+    tamanho: 'M', cor: 'Rosa',
+    bordado: 'BORDADO JESUS MISERICORDIOSO', qtdTotal: 20,
+    precoUnitario: 95, valorTotal: 1900, custoBordado: 22.00, frete: 90, status: 'concluido',
+    dataEntregaProduto: '2026-05-22', dataEntregaBordado: '2026-05-30',
+    leadTimeProduto: 12, leadTimeBordado: 8, observacoes: '', adicionadoAoEstoque: true,
+  },
+  {
+    id: 'c8', dataPedido: '2026-05-20', fornecedor: 'Larissa / Modelar', produto: 'Regata feminina',
+    tamanho: 'P', cor: 'Branco',
+    bordado: 'BORDADO SANTA TERESINHA', qtdTotal: 30,
+    precoUnitario: 28, valorTotal: 840, custoBordado: 12.50, frete: 60, status: 'concluido',
+    dataEntregaProduto: '2026-05-30', dataEntregaBordado: '2026-06-05',
+    leadTimeProduto: 10, leadTimeBordado: 6, observacoes: '', adicionadoAoEstoque: true,
+  },
+  {
+    id: 'c9', dataPedido: '2026-04-15', fornecedor: 'Larissa / Modelar', produto: 'T-shirt viscolycra',
+    tamanho: 'M', cor: 'Preto',
+    bordado: 'BORDADO APARECIDA', qtdTotal: 50,
+    precoUnitario: 31.90, valorTotal: 1595, custoBordado: 15.97, frete: 100, status: 'concluido',
+    dataEntregaProduto: '2026-04-25', dataEntregaBordado: '2026-05-02',
+    leadTimeProduto: 10, leadTimeBordado: 7, observacoes: '', adicionadoAoEstoque: true,
   },
   {
     id: 'c3', dataPedido: '2026-06-20', fornecedor: 'Lessi', produto: 'Blazer linho feminino',
-    bordado: 'BORDADO GUADALUPE FLORAL', qtdPP: 2, qtdP: 4, qtdM: 6, qtdG: 4, qtdGG: 2, qtdTotal: 18,
+    tamanho: 'P', cor: 'Bege',
+    bordado: 'BORDADO GUADALUPE FLORAL', qtdTotal: 18,
     precoUnitario: 160, valorTotal: 2880, status: 'produto_recebido',
     dataEntregaProduto: '2026-07-02', leadTimeProduto: 12, observacoes: 'Bordado agendado para 10/07',
   },
   {
     id: 'c4', dataPedido: '2026-07-01', fornecedor: 'RS Bags', produto: 'Bolsa couro sintético',
-    bordado: 'BORDADO APARECIDA', qtdPP: 0, qtdP: 0, qtdM: 15, qtdG: 10, qtdGG: 0, qtdTotal: 25,
+    tamanho: 'Único', cor: 'Preto',
+    bordado: 'BORDADO APARECIDA', qtdTotal: 25,
     precoUnitario: 55, valorTotal: 1375, status: 'bordado_em_andamento',
     dataEntregaProduto: '2026-07-07', leadTimeProduto: 6, observacoes: '',
   },
   {
     id: 'c5', dataPedido: '2026-07-05', fornecedor: 'Larissa / Modelar', produto: 'T-shirt viscolycra',
-    bordado: 'BORDADO SAGRADO CORAÇÃO JESUS', qtdPP: 10, qtdP: 15, qtdM: 20, qtdG: 15, qtdGG: 10, qtdTotal: 70,
+    tamanho: 'M', cor: 'Azul Marinho',
+    bordado: 'BORDADO SAGRADO CORAÇÃO JESUS', qtdTotal: 70,
     precoUnitario: 31.90, valorTotal: 2233, status: 'compra_solicitada',
     observacoes: 'Aguardando confirmação do fornecedor',
   },
   {
     id: 'c6', dataPedido: '2026-07-10', fornecedor: 'Bia Chacon', produto: 'Tricoline manga curta',
-    bordado: 'BORDADO NOSSA SENHORA FATIMA', qtdPP: 5, qtdP: 10, qtdM: 15, qtdG: 10, qtdGG: 5, qtdTotal: 45,
+    tamanho: 'PP', cor: 'Rosa',
+    bordado: 'BORDADO NOSSA SENHORA FATIMA', qtdTotal: 45,
     precoUnitario: 60, valorTotal: 2700, status: 'aguardando',
     observacoes: '',
   },
@@ -182,8 +238,8 @@ export const mockParametros: ParametrosFinanceiros = {
   descontoAtacadoVista: 0.35,
   despesaVariavel: 0.02,
   embalagem: {
-    pequena: 2.70,
-    media: 3.20,
+    pequena: 4.00,
+    media: 4.00,
     grande: 4.00,
   },
   etiquetas: 0.225,
@@ -348,6 +404,34 @@ export const mockEventos: Evento[] = [
     { bordadoCodigo: '0201', bordadoNome: 'BORDADO NOSSA SENHORA GRAÇAS', quantidade: 18 },
     { bordadoCodigo: '7701', bordadoNome: 'BORDADO JESUS MISERICORDIOSO', quantidade: 15 },
   ] },
+]
+
+// ─── Funcionários ─────────────────────────────────────────────────────────────
+export const mockFuncionarios: Funcionario[] = [
+  {
+    id: 'fn1',
+    nome: 'Marília Andrade',
+    cargo: 'Gerente de Atendimento',
+    responsabilidades: ['Atender clientes presencialmente e pelo WhatsApp', 'Registrar vendas no sistema', 'Gerenciar wishlist de clientes', 'Emitir notas e documentos fiscais'],
+    rotinas: ['Abertura da loja às 9h', 'Conferir pedidos pendentes', 'Atualizar status de compras', 'Fechamento do caixa às 18h'],
+    criadoEm: '2024-01-01',
+  },
+  {
+    id: 'fn2',
+    nome: 'Lis Cavalcanti',
+    cargo: 'Bordadeira Principal',
+    responsabilidades: ['Executar todos os bordados das peças', 'Controlar qualidade do bordado', 'Informar conclusão de bordados no sistema', 'Manter o estoque de linhas e insumos'],
+    rotinas: ['Verificar fila de bordados ao iniciar', 'Escanear QR ao concluir cada peça', 'Separar peças por prioridade', 'Registrar bordados concluídos diariamente'],
+    criadoEm: '2024-01-01',
+  },
+  {
+    id: 'fn3',
+    nome: 'Rana Oliveira',
+    cargo: 'Auxiliar de Estoque',
+    responsabilidades: ['Receber mercadorias dos fornecedores', 'Organizar estoque por categoria', 'Escanear QR ao adicionar peças ao estoque', 'Embalar produtos vendidos'],
+    rotinas: ['Conferir entregas ao chegar', 'Atualizar entradas no sistema', 'Organizar prateleiras por design', 'Separar pedidos para entrega'],
+    criadoEm: '2024-06-01',
+  },
 ]
 
 // ─── Movimentações de Caixa (saídas manuais) ──────────────────────────────────

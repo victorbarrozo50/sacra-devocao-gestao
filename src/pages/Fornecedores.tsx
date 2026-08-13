@@ -136,22 +136,26 @@ export default function Fornecedores() {
       .sort((a, b) => b.dataPedido.localeCompare(a.dataPedido))
   }
 
-  function leadTimeMedio(nome: string) {
+  function leadTimeMedio(nome: string): number | null {
     const cs = comprasForn(nome).filter((c) => c.leadTimeProduto != null)
     if (cs.length === 0) return null
     return Math.round(cs.reduce((s, c) => s + (c.leadTimeProduto ?? 0), 0) / cs.length)
+  }
+
+  function leadTimeBordadoMedio(nome: string): number | null {
+    const cs = comprasForn(nome).filter((c) => c.leadTimeBordado != null)
+    if (cs.length === 0) return null
+    return Math.round(cs.reduce((s, c) => s + (c.leadTimeBordado ?? 0), 0) / cs.length)
   }
 
   function totalComprado(nome: string) {
     return comprasForn(nome).reduce((s, c) => s + c.valorTotal, 0)
   }
 
-  // KPIs globais
+  // KPIs globais — avg of all leadTimeProduto values across all compras
   const kpis = useMemo(() => {
-    const ltArr = fornecedores
-      .map((f) => leadTimeMedio(f.nome))
-      .filter((v): v is number => v !== null)
-    const ltGlobal = ltArr.length > 0 ? Math.round(ltArr.reduce((a, b) => a + b, 0) / ltArr.length) : null
+    const ltProdArr = compras.filter(c => c.leadTimeProduto != null).map(c => c.leadTimeProduto!)
+    const ltGlobal = ltProdArr.length > 0 ? Math.round(ltProdArr.reduce((a, b) => a + b, 0) / ltProdArr.length) : null
     return {
       totalForn: fornecedores.length,
       totalProds: produtos.length,
@@ -233,6 +237,7 @@ export default function Fornecedores() {
   const prodsDoForn = fornSel ? prodsForn(fornSel.id) : []
   const comprasDoForn = fornSel ? comprasForn(fornSel.nome) : []
   const ltDoForn = fornSel ? leadTimeMedio(fornSel.nome) : null
+  const ltBordadoDoForn = fornSel ? leadTimeBordadoMedio(fornSel.nome) : null
   const totalDoForn = fornSel ? totalComprado(fornSel.nome) : 0
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -262,8 +267,8 @@ export default function Fornecedores() {
 
       {/* Search + Add */}
       <div className="flex gap-3 items-center">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9A7540' }} />
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#9A7540' }} />
           <input
             className="sacra-input pl-9"
             placeholder="Buscar fornecedor..."
@@ -271,7 +276,7 @@ export default function Fornecedores() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button className="btn-primary ml-auto" onClick={openNovoForn}>
+        <button className="btn-primary flex-shrink-0" onClick={openNovoForn}>
           <Plus size={15} /> Novo Fornecedor
         </button>
       </div>
@@ -316,6 +321,7 @@ export default function Fornecedores() {
           const prods = prodsForn(f.id)
           const nCompras = comprasForn(f.nome).length
           const lt = leadTimeMedio(f.nome)
+          const ltBordado = leadTimeBordadoMedio(f.nome)
           const total = totalComprado(f.nome)
 
           return (
@@ -374,7 +380,15 @@ export default function Fornecedores() {
                   <p className="text-xs" style={{ color: '#9A7540' }}>Lead Time</p>
                   <p className="font-semibold text-sm" style={{ color: lt != null ? '#D97706' : '#B09070' }}>
                     {lt != null ? `${lt}d` : '—'}
+                    {ltBordado != null && (
+                      <span className="ml-1 text-xs font-normal" style={{ color: '#16A34A' }}>+{ltBordado}d</span>
+                    )}
                   </p>
+                  {lt != null && (
+                    <p className="text-xs" style={{ color: '#9A7540', opacity: 0.6 }}>
+                      {ltBordado != null ? 'prod · bord' : 'produto'}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs" style={{ color: '#9A7540' }}>Total</p>
@@ -491,8 +505,16 @@ export default function Fornecedores() {
                   <p className="text-xs" style={{ color: '#9A7540' }}>Lead Time</p>
                 </div>
                 <p className="font-heading text-lg font-semibold" style={{ color: ltDoForn != null ? '#D97706' : '#B09070' }}>
-                  {ltDoForn != null ? `${ltDoForn} dias` : '—'}
+                  {ltDoForn != null ? `${ltDoForn}d` : '—'}
+                  {ltBordadoDoForn != null && (
+                    <span className="ml-1 text-base font-normal" style={{ color: '#16A34A' }}>+{ltBordadoDoForn}d</span>
+                  )}
                 </p>
+                {ltDoForn != null && (
+                  <p className="text-xs mt-0.5" style={{ color: '#9A7540', opacity: 0.6 }}>
+                    {ltBordadoDoForn != null ? 'prod · bord' : 'produto'}
+                  </p>
+                )}
               </div>
               <div className="text-center">
                 <p className="text-xs mb-0.5" style={{ color: '#9A7540' }}>Total Comprado</p>

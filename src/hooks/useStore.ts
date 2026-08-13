@@ -8,23 +8,28 @@ import type {
   ItemMix,
   StatusCompra,
   ParametrosFinanceiros,
+  DREMes,
+  LancamentoPD,
+  ProcessoManual,
+  ProdutoVariante,
 } from '../types'
 import {
   mockBordados,
   mockFornecedores,
   mockProdutos,
+  mockVariantes,
   mockSKUs,
   mockVendas,
   mockCompras,
   mockCustosFixos,
   mockParametros,
   mockMixProdutos,
-  mockDREMeses,
   mockClientes,
   mockWishlist,
   mockComprasHistorico,
   mockEventos,
   mockMovimentacoes,
+  mockFuncionarios,
 } from '../data/mock-data'
 import { nanoid } from '../utils/format'
 
@@ -35,18 +40,21 @@ export const useStore = create<AppStore>()(
       bordados: mockBordados,
       fornecedores: mockFornecedores,
       produtos: mockProdutos,
+      variantes: mockVariantes,
       skus: mockSKUs,
       vendas: mockVendas,
       compras: mockCompras,
       custosFixos: mockCustosFixos,
       parametros: mockParametros,
       mixProdutos: mockMixProdutos,
-      dreMeses: mockDREMeses,
       clientes: mockClientes,
       wishlist: mockWishlist,
       comprasHistorico: mockComprasHistorico,
       eventos: mockEventos,
       movimentacoes: mockMovimentacoes,
+      funcionarios: mockFuncionarios,
+      lancamentosPD: [] as LancamentoPD[],
+      processos: [] as ProcessoManual[],
 
       // ── Vendas ────────────────────────────────────────────────────────────
       addVenda: (v) =>
@@ -131,7 +139,24 @@ export const useStore = create<AppStore>()(
       updateProduto: (id, p) =>
         set((s) => ({ produtos: s.produtos.map((x) => (x.id === id ? { ...x, ...p } : x)) })),
       deleteProduto: (id) =>
-        set((s) => ({ produtos: s.produtos.filter((x) => x.id !== id) })),
+        set((s) => ({
+          produtos: s.produtos.filter((x) => x.id !== id),
+          variantes: s.variantes.filter((v) => v.produtoId !== id),
+        })),
+
+      // ── Variantes ─────────────────────────────────────────────────────────
+      addVariante: (v) =>
+        set((s) => ({ variantes: [...s.variantes, { ...v, id: `var${nanoid()}` }] })),
+      updateVariante: (id, v) =>
+        set((s) => ({ variantes: s.variantes.map((x) => (x.id === id ? { ...x, ...v } : x)) })),
+      deleteVariante: (id) =>
+        set((s) => ({ variantes: s.variantes.filter((x) => x.id !== id) })),
+      ajustarEstoque: (id, delta) =>
+        set((s) => ({
+          variantes: s.variantes.map((x) =>
+            x.id === id ? { ...x, estoque: Math.max(0, x.estoque + delta) } : x
+          ),
+        })),
 
       // ── Eventos ───────────────────────────────────────────────────────────
       addEvento: (e) =>
@@ -174,9 +199,36 @@ export const useStore = create<AppStore>()(
         set((s) => ({ bordados: s.bordados.map((x) => (x.codigo === codigo ? { ...x, ...b } : x)) })),
       deleteBordado: (codigo) =>
         set((s) => ({ bordados: s.bordados.filter((x) => x.codigo !== codigo) })),
+
+      // ── Funcionários ──────────────────────────────────────────────────────
+      addFuncionario: (f) =>
+        set((s) => ({ funcionarios: [...s.funcionarios, { ...f, id: `fn${nanoid()}` }] })),
+      updateFuncionario: (id, f) =>
+        set((s) => ({ funcionarios: s.funcionarios.map((x) => (x.id === id ? { ...x, ...f } : x)) })),
+      deleteFuncionario: (id) =>
+        set((s) => ({ funcionarios: s.funcionarios.filter((x) => x.id !== id) })),
+      reorderFuncionarios: (ids) =>
+        set((s) => {
+          const map = new Map(s.funcionarios.map((f) => [f.id, f]))
+          return { funcionarios: ids.map((id) => map.get(id)!).filter(Boolean) }
+        }),
+
+      // ── Presentes e Doações ───────────────────────────────────────────────
+      addLancamentoPD: (l) =>
+        set((s) => ({ lancamentosPD: [...s.lancamentosPD, { ...l, id: nanoid() }] })),
+      deleteLancamentoPD: (id) =>
+        set((s) => ({ lancamentosPD: s.lancamentosPD.filter((x) => x.id !== id) })),
+
+      // ── Processos (Manual) ────────────────────────────────────────────────
+      addProcesso: (p) =>
+        set((s) => ({ processos: [...s.processos, { ...p, id: nanoid() }] })),
+      updateProcesso: (id, p) =>
+        set((s) => ({ processos: s.processos.map((x) => x.id === id ? { ...x, ...p } : x) })),
+      deleteProcesso: (id) =>
+        set((s) => ({ processos: s.processos.filter((x) => x.id !== id) })),
     }),
     {
-      name: 'sacra-devocao-gestao-v3',
+      name: 'sacra-devocao-gestao-v5',
       partialize: (s) => ({
         vendas: s.vendas,
         compras: s.compras,
@@ -189,15 +241,68 @@ export const useStore = create<AppStore>()(
         bordados: s.bordados,
         fornecedores: s.fornecedores,
         produtos: s.produtos,
+        variantes: s.variantes,
         skus: s.skus,
         eventos: s.eventos,
         movimentacoes: s.movimentacoes,
+        funcionarios: s.funcionarios,
+        lancamentosPD: s.lancamentosPD,
+        processos: s.processos,
       }),
     }
   )
 )
 
 // ── Computed selectors ────────────────────────────────────────────────────────
+export function calcDREMeses(
+  vendas: Venda[],
+  compras: Compra[],
+  custosFixos: CustoFixo[],
+  parametros: ParametrosFinanceiros
+): DREMes[] {
+  const mesesSet = new Set<string>()
+  vendas.forEach((v) => mesesSet.add(v.data.slice(0, 7)))
+  if (mesesSet.size === 0) return []
+
+  const custoFixoMensal = custosFixos.reduce((s, c) => s + c.valor, 0)
+  const mesesNomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+  const fmtMes = (ym: string) => {
+    const [y, m] = ym.split('-')
+    return `${mesesNomes[Number(m) - 1]}/${y.slice(2)}`
+  }
+
+  return Array.from(mesesSet).sort().map((mes) => {
+    const vendasMes = vendas.filter((v) => v.data.startsWith(mes))
+    const receitaBruta = vendasMes.reduce((s, v) => s + v.total, 0)
+    const taxaMedia = parametros.taxaCartao * parametros.percentualCartao + parametros.comissaoVarejo + parametros.despesaVariavel
+    const deducoes = receitaBruta * taxaMedia
+    const receitaLiquida = receitaBruta - deducoes
+
+    const comprasMes = compras.filter((c) => {
+      const d = c.dataEntregaBordado ?? c.dataEntregaProduto ?? c.dataPedido
+      return d.startsWith(mes) && c.adicionadoAoEstoque
+    })
+    const custoVariavel = comprasMes.reduce((s, c) =>
+      s + c.precoUnitario * c.qtdTotal + (c.custoBordado ?? 0) * c.qtdTotal + (c.frete ?? 0), 0)
+
+    const margemContribuicao = receitaLiquida - custoVariavel
+    const lucroOperacional = margemContribuicao - custoFixoMensal
+    const margemPercent = receitaBruta > 0 ? (lucroOperacional / receitaBruta) * 100 : 0
+
+    return {
+      mes: fmtMes(mes),
+      receitaBruta,
+      deducoes,
+      receitaLiquida,
+      custoVariavel,
+      margemContribuicao,
+      custoFixo: custoFixoMensal,
+      lucroOperacional,
+      margemPercent,
+    }
+  })
+}
+
 export function calcPontoEquilibrio(custosFixos: CustoFixo[], mixProdutos: ItemMix[], parametros: ParametrosFinanceiros) {
   const custoFixoTotal = custosFixos.reduce((s, c) => s + c.valor, 0)
   const faturamento = mixProdutos.reduce((s, i) => s + i.faturamento, 0)
